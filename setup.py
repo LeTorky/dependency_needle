@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="dependency_needle",
@@ -6,6 +6,6 @@ setup(
     description="Dependency injection container",
     author="Your Name",
     author_email="24torky@gmail.com",
-    packages=["dependency_needle"],
+    packages=find_packages(),
     install_requires=[]
 )
