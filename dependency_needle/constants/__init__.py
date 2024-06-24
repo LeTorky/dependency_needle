@@ -1,1 +1,1 @@
-from DependencyNeedle.constants.constants import *
+from dependency_needle.constants.constants import *

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from DependencyNeedle.constants import ANNOTATIONS, RETURN, INIT
+from dependency_needle.constants import ANNOTATIONS, RETURN, INIT
 
 
 class IDependencyStrategyInterface(ABC):

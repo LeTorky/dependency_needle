@@ -1,6 +1,6 @@
 from abc import ABC
 from typing import Optional
-from DependencyNeedle.dependency_strategy.\
+from dependency_needle.dependency_strategy.\
     dependency_strategy_interface import IDependencyStrategyInterface
 
 

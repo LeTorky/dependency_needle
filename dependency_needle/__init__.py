@@ -1,2 +1,2 @@
-from container import *
-from lifetime_enums import *
+from dependency_needle.container import *
+from dependency_needle.lifetime_enums import *

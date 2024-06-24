@@ -1,7 +1,7 @@
 from abc import ABC
 
-from DependencyNeedle.lifetime_enums import LifeTimeEnums
-from DependencyNeedle.dependency_strategy import (
+from dependency_needle.lifetime_enums import LifeTimeEnums
+from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
     ScopedDependencyStrategy,
     TransientDependencyStrategy,

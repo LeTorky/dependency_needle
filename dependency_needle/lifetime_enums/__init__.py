@@ -1,1 +1,1 @@
-from DependencyNeedle.lifetime_enums.lifetime_enums import *
+from dependency_needle.lifetime_enums.lifetime_enums import *

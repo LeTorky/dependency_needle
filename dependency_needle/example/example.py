@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from DependencyNeedle.container import Container
-from DependencyNeedle.lifetime_enums import LifeTimeEnums
+from dependency_needle.container import Container
+from dependency_needle.lifetime_enums import LifeTimeEnums
 
 
 def main():
