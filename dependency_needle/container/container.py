@@ -1,4 +1,5 @@
 from abc import ABC
+from functools import wraps
 
 from http.client import HTTPConnection as ClientHTTPConnection
 from requests import Request
@@ -134,6 +135,7 @@ class Container:
         # registered classes as it might be needed by other frameworks.
         non_registered_annotations = {}
 
+        @wraps(fn)
         def wrapper(*args, **kwargs):
 
             if hasattr(fn, ANNOTATIONS):
