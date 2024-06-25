@@ -1,5 +1,10 @@
 from abc import ABC
 
+from http.client import HTTPConnection as ClientHTTPConnection
+from requests import Request
+from starlette.requests import HTTPConnection as StarlletteHTTPConnection
+
+from dependency_needle.constants import ANNOTATIONS, RETURN
 from dependency_needle.lifetime_enums import LifeTimeEnums
 from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
@@ -12,6 +17,12 @@ from dependency_needle.dependency_strategy import (
 class Container:
     """Container used to build a class by automating the dependancy injection
     to obtain inversion of control"""
+
+    request_class_types = [
+        Request,
+        StarlletteHTTPConnection,
+        ClientHTTPConnection
+    ]
 
     def __init__(self):
         self.__interface_registery_lookup = {}
@@ -110,3 +121,74 @@ class Container:
         """
         if key_lookup in self.__transient_lookup:
             del self.__transient_lookup[key_lookup]
+
+    def build_dependencies_decorator(self, fn):
+        """Wrap a given function to build its dependencies\
+        if they are registered.
+
+        :param fn: function with request/identifier as its\
+        first parameter or an annotated parameter of type "Request".
+        :return: wrapped function.
+        """
+        # We need to provide a new annotation dictionary with non
+        # registered classes as it might be needed by other frameworks.
+        non_registered_annotations = {}
+
+        def wrapper(*args, **kwargs):
+
+            if hasattr(fn, ANNOTATIONS):
+                dependencies: dict = getattr(
+                    fn,
+                    ANNOTATIONS
+                )
+
+                # Get request from annotations if it exists.
+                request_kwarg_key = ''
+
+                for key, class_type in dependencies.items():
+                    if any([
+                        issubclass(class_type, request_type)
+                        for request_type in Container.request_class_types
+                    ]):
+                        request_kwarg_key = key
+
+                built_dependencies = {}
+
+                if request_kwarg_key:
+                    request_or_identifier = kwargs.pop(request_kwarg_key)
+                    # Assign request to kwargs as it'll be passed as a kwarg
+                    # if its annotated.
+                    built_dependencies[request_kwarg_key] = (
+                        request_or_identifier
+                    )
+                else:
+                    try:
+                        request_or_identifier = args[0]
+                    except IndexError:
+                        raise IndexError(
+                            "Request parameter doesn't exist as an annotated"
+                            " parameter or first parameter."
+                        )
+
+                for key, interface in dependencies.items():
+                    try:
+                        if key != RETURN:
+                            built_dependencies[key] = self.build(
+                                interface, request_or_identifier
+                            )
+                    except (KeyError, TypeError):
+                        # Interface is not registered and needs to be assigned
+                        # back to be handled by a framework if needed.
+                        non_registered_annotations[key] = interface
+
+                kwargs.update(built_dependencies)
+
+            result = fn(*args, **kwargs)
+            self.clear(request_or_identifier)
+
+            return result
+
+        if non_registered_annotations:
+            setattr(wrapper, ANNOTATIONS, non_registered_annotations)
+
+        return wrapper

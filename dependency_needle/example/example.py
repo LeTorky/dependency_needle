@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 
+from http.client import HTTPConnection as ClientHTTPConnection
+from requests import Request
+from starlette.requests import HTTPConnection as StarlletteHTTPConnection
+
 from dependency_needle.container import Container
 from dependency_needle.lifetime_enums import LifeTimeEnums
 
@@ -56,10 +60,22 @@ def main():
     container.register_interface(
         MockInterfaceThree, ConcreteThree, LifeTimeEnums.TRANSIENT)
 
-    built_object = container.build(
-        MockInterfaceThree, "REQUEST_OBJECT_OR_UNIQUE_KEY")
+    @container.build_dependencies_decorator
+    def method_with_dependencies_kwarg(request: Request,
+                                       dependency: MockInterfaceThree):
+        return dependency
 
-    return built_object
+    @container.build_dependencies_decorator
+    def method_with_dependencies_arg(request,
+                                     dependency: MockInterfaceThree):
+        return dependency
+
+    dependency_array = [
+        method_with_dependencies_kwarg(request=Request()),
+        method_with_dependencies_arg(Request()),
+    ]
+
+    return dependency_array
 
 
 if __name__ == "__main__":
