@@ -1,5 +1,6 @@
 from abc import ABC
 from functools import wraps
+from inspect import signature
 
 from http.client import HTTPConnection as ClientHTTPConnection
 from requests import Request
@@ -131,10 +132,6 @@ class Container:
         first parameter or an annotated parameter of type "Request".
         :return: wrapped function.
         """
-        # We need to provide a new annotation dictionary with non
-        # registered classes as it might be needed by other frameworks.
-        non_registered_annotations = {}
-
         @wraps(fn)
         def wrapper(*args, **kwargs):
 
@@ -179,9 +176,7 @@ class Container:
                                 interface, request_or_identifier
                             )
                     except (KeyError, TypeError):
-                        # Interface is not registered and needs to be assigned
-                        # back to be handled by a framework if needed.
-                        non_registered_annotations[key] = interface
+                        continue
 
                 kwargs.update(built_dependencies)
 
@@ -190,7 +185,16 @@ class Container:
 
             return result
 
-        if non_registered_annotations:
-            setattr(wrapper, ANNOTATIONS, non_registered_annotations)
+        func_signature = signature(wrapper)
+
+        wrapper_signature = func_signature.replace(
+            parameters=[
+                parameter for parameter in func_signature.parameters.values()
+                if parameter.annotation
+                not in self.__interface_registery_lookup
+            ]
+        )
+
+        wrapper.__signature__ = wrapper_signature
 
         return wrapper
