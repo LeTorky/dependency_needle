@@ -148,6 +148,7 @@ class Container:
                     if any([
                         issubclass(class_type, request_type)
                         for request_type in Container.request_class_types
+                        if key != RETURN
                     ]):
                         request_kwarg_key = key
 
