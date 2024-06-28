@@ -60,13 +60,28 @@ class Container:
             raise TypeError(f"Concrete class: {concrete_class}"
                             f" has to implement interface: {interface}.")
 
+    def __is_abstract_class(self, interface: ABC) -> bool:
+        """Check if interface sent is an abstract class.
+
+        :param interface: interface needed to be checked.
+        :return: bool.
+        """
+
+        bases = interface.__bases__
+
+        return True if ABC in bases else any([
+            self.__is_abstract_class(base)
+            for base in bases
+        ])
+
     def __assert_abstract_class(self, interface: ABC) -> None:
         """Assert that the interface being registered is an abstract class.
 
         :param interface: interface needed to be registered.
         :return: None
         """
-        if ABC not in interface.__bases__:
+        is_abstract = self.__is_abstract_class(interface)
+        if not is_abstract:
             raise TypeError(f"Interface: {interface}"
                             f" has to be an abstract class.")
 

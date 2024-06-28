@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 
-from http.client import HTTPConnection as ClientHTTPConnection
 from requests import Request
-from starlette.requests import HTTPConnection as StarlletteHTTPConnection
 
 from dependency_needle.container import Container
 from dependency_needle.lifetime_enums import LifeTimeEnums
