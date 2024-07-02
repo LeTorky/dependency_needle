@@ -10,3 +10,5 @@ class LifeTimeEnums(Enum):
     TRANSIENT = "transient"
     # Same object for each dependant class for any request.
     SINGLETON = "singleton"
+    # New object received in time of instantiation.
+    JUST_IN_TIME = "just_in_time"
