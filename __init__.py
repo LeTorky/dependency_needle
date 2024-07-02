@@ -1,1 +1,1 @@
-from dependency_needle import *
+from dependency_needle import *  # noqa

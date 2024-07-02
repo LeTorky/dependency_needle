@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 setup(
     name="dependency_needle",
-    version="1.2.6",
+    version="1.3.0",
     description="Dependency injection container",
     author="Abdelrahman Torky",
     author_email="24torky@gmail.com",
