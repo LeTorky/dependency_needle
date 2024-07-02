@@ -147,7 +147,8 @@ class Container:
         :param life_time: life time enum specifying the lifetime of the class.
         :return: None
         """
-        self.__assert_abstract_class(interface)
+        if life_time != LifeTimeEnums.JUST_IN_TIME:
+            self.__assert_abstract_class(interface)
         self.__assert_implementation(interface, concrete_class)
         self.__assert_proper_enum_used(life_time)
         strategy: IDependencyStrategyInterface = (
@@ -190,10 +191,10 @@ class Container:
             if key_lookup in lookup:
                 del lookup[key_lookup]
 
-    def register_jit_interface_instance(self,
-                                        interface: ABC,
-                                        instance: object,
-                                        key_lookup: object) -> None:
+    def __register_jit_interface_instance(self,
+                                          interface: ABC,
+                                          instance: object,
+                                          key_lookup: object) -> None:
         """Register JIT interface instance to container's\
         JIT dependencies lookup.
 
@@ -287,7 +288,7 @@ class Container:
                         try:
                             if interface in jit_interfaces:
                                 instance = kwargs[key]
-                                self.register_jit_interface_instance(
+                                self.__register_jit_interface_instance(
                                     interface,
                                     instance,
                                     request_or_identifier
