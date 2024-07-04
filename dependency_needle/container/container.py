@@ -307,8 +307,10 @@ class Container:
 
                     kwargs.update(built_dependencies)
 
-                result = fn(*args, **kwargs)
-                self.clear(request_or_identifier)
+                try:
+                    result = fn(*args, **kwargs)
+                finally:
+                    self.clear(request_or_identifier)
 
                 return result
 
