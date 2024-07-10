@@ -233,21 +233,22 @@ class Container:
             first parameter or an annotated parameter of type "Request".
             :return: wrapped function.
             """
-            dependencies = {}
+            fn_dependencies = {}
 
             if hasattr(fn, ANNOTATIONS):
-                dependencies: dict = getattr(
+                fn_dependencies: dict = getattr(
                     fn,
                     ANNOTATIONS
                 )
 
             self.__assert_jit_interfaces_contained_in_annotations(
                 jit_interfaces,
-                dependencies
+                fn_dependencies
             )
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
+                dependencies = fn_dependencies.copy()
                 if dependencies:
                     # Get request from annotations if it exists.
                     request_kwarg_key = ''
