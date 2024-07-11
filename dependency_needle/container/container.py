@@ -3,7 +3,7 @@ from functools import wraps
 from inspect import signature
 
 from http.client import HTTPConnection as ClientHTTPConnection
-from typing import Dict, Set, Callable
+from typing import Any, Dict, List, Optional, Set, Callable
 from requests import Request
 from starlette.requests import HTTPConnection as StarlletteHTTPConnection
 
@@ -53,7 +53,8 @@ class Container:
         if interface not in self.__interface_registery_lookup:
             raise KeyError(f"Interface: {interface} is not registered.")
 
-    def __assert_implementation(self, interface: ABC, concrete_class) -> None:
+    def __assert_implementation(self, interface: ABC,
+                                concrete_class: type) -> None:
         """Assert that the concrete class implements the interface
         being registered.
 
@@ -138,7 +139,7 @@ class Container:
                     )
 
     def register_interface(self, interface: ABC,
-                           concrete_class,
+                           concrete_class: type,
                            life_time: LifeTimeEnums) -> None:
         """Register interface with a corresponding concrete class to use.
 
@@ -159,20 +160,53 @@ class Container:
         self.__interface_registery_lookup[interface] = strategy(
             lookup, interface, concrete_class)
 
-    def build(self, interface: ABC, key_lookup) -> object:
+    def __get_jit_transient_interface_lookup(
+        self, registery_lookup: Dict[ABC, type]
+    ) -> Dict[ABC, IDependencyStrategyInterface]:
+        jit_interface_lookup: Dict[ABC, IDependencyStrategyInterface] = {}
+
+        for interface, concrete_class in registery_lookup.items():
+            self.__assert_abstract_class(interface)
+            self.__assert_implementation(interface, concrete_class)
+            strategy: IDependencyStrategyInterface = (
+                self.__lifetime_strategy_lookup[LifeTimeEnums.TRANSIENT]
+            )
+
+            lookup = self.__lifetime_meta_lookup[LifeTimeEnums.TRANSIENT]
+            jit_interface_lookup[interface] = strategy(
+                lookup, interface, concrete_class)
+
+        return jit_interface_lookup
+
+    def build(self, interface: ABC, key_lookup,
+              jit_transient_lookup: Dict[ABC, type] = {}) -> object:
         """Build an interface by utilizing the registery lookup.
 
         :param interface: interface needed to be built
         :param key_lookup: key_lookup that might be used to lookup\
         registered interfaces.
+        :param jit_transient_lookup: optional lookup to register\
+        transient interfaces in run time.
         :return object: concrete class that implemenets that interface
         """
-        self.__gaurd_build_unregistered_interface(interface)
-        interface_strategy_instance: IDependencyStrategyInterface = (
-            self.__interface_registery_lookup[interface]
+        interface_registery_lookup = self.__interface_registery_lookup.copy()
+        interface_registery_lookup.update(
+            self.__get_jit_transient_interface_lookup(jit_transient_lookup)
         )
+        if interface in jit_transient_lookup:
+            interface_strategy_instance: IDependencyStrategyInterface = (
+                interface_registery_lookup[
+                    interface
+                ]
+            )
+        else:
+            self.__gaurd_build_unregistered_interface(interface)
+            interface_strategy_instance: IDependencyStrategyInterface = (
+                self.__interface_registery_lookup[interface]
+            )
+
         return interface_strategy_instance.build(
-            self.__interface_registery_lookup,
+            interface_registery_lookup,
             key_lookup
         )
 
@@ -214,14 +248,24 @@ class Container:
                 interface: instance
             }
 
-    def build_dependencies_decorator(self,
-                                     jit_interfaces: Set = set()) -> Callable:
+    def build_dependencies_decorator(
+        self,
+        jit_interfaces: Set = set(),
+        get_jit_transient_interfaces: Optional[
+            Callable[
+                [List, Dict[str, Any]], Dict[ABC, type]
+            ]
+        ] = None
+    ) -> Callable:
         """Build a method dependencies decorator to wrap\
         a given function to build its dependencies\
         if they are registered.
 
-        :param jit_interfaces: List of JIT interfaces that should
+        :param jit_interfaces: optional set of JIT interfaces that should
         get injected in runtime.
+        :param get_jit_transient_interfaces: optional callable that takes\
+        the same wrapped function's arguments and returns an interface\
+        concrete class lookup. 
         :return: dependencies builder decorator.
         """
 
@@ -249,7 +293,13 @@ class Container:
             @wraps(fn)
             def wrapper(*args, **kwargs):
                 dependencies = fn_dependencies.copy()
+                runtime_registery = {}
                 if dependencies:
+                    # Get jit transient interfaces if callback is passed
+                    if get_jit_transient_interfaces:
+                        runtime_registery.update(get_jit_transient_interfaces(
+                            *args, **kwargs
+                        ))
                     # Get request from annotations if it exists.
                     request_kwarg_key = ''
                     for key, class_type in dependencies.items():
@@ -284,7 +334,7 @@ class Container:
                         kwargs
                     )
 
-                    # Register Just-In-Time dependencies.
+                    # Register Just-In-Time dependency instances.
                     for key, interface in dependencies.items():
                         try:
                             if interface in jit_interfaces:
@@ -301,7 +351,9 @@ class Container:
                         try:
                             if key != RETURN:
                                 built_dependencies[key] = self.build(
-                                    interface, request_or_identifier
+                                    interface,
+                                    request_or_identifier,
+                                    runtime_registery
                                 )
                         except (KeyError, TypeError):
                             continue
