@@ -191,9 +191,10 @@ class Container:
         self.__gaurd_invalid_identifier(id_arg, id_kwarg)
 
         if id_kwarg:
-            return IdentifierFacade.get_identifier_within_kwarg(id_arg, kwargs)
+            return IdentifierFacade.get_identifier_within_kwarg(id_kwarg,
+                                                                **kwargs)
         if id_arg:
-            return IdentifierFacade.get_identifier_within_args(id_arg, args)
+            return IdentifierFacade.get_identifier_within_args(id_arg, *args)
         return IdentifierFacade.get_identifier_within_args(1, args)
 
     def build_dependencies_decorator(self,

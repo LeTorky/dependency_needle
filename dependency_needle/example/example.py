@@ -58,12 +58,12 @@ async def main():
     container.register_interface(
         MockInterfaceThree, ConcreteThree, LifeTimeEnums.TRANSIENT)
 
-    @container.build_dependencies_decorator()
+    @container.build_dependencies_decorator(id_kwarg='request')
     def method_with_dependencies_kwarg(request: Request,
                                        dependency: MockInterfaceThree):
         return dependency
 
-    @container.build_dependencies_decorator()
+    @container.build_dependencies_decorator(id_arg=1)
     async def method_with_dependencies_arg(request,
                                            dependency: MockInterfaceThree):
         return dependency
