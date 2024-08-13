@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, Optional
 from requests import Request
 from starlette.requests import HTTPConnection as StarlletteHTTPConnection
 
-from dependency_needle.constants import ANNOTATIONS
+from dependency_needle.constants import ANNOTATIONS, RETURN
 from dependency_needle.lifetime_enums import LifeTimeEnums
 from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
@@ -161,7 +161,8 @@ class Container:
             )
 
             for key, interface in dependencies.items():
-                if interface in self.__interface_registery_lookup:
+                if (interface in self.__interface_registery_lookup
+                        and key != RETURN):
                     kwargs[key] = self.build(
                         interface, identifier
                     )
