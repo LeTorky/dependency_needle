@@ -1,12 +1,13 @@
 from abc import ABC
 from functools import wraps
-from inspect import signature
+from inspect import signature, iscoroutinefunction
 
 from http.client import HTTPConnection as ClientHTTPConnection
+from typing import Any, Callable, Dict, Optional
 from requests import Request
 from starlette.requests import HTTPConnection as StarlletteHTTPConnection
 
-from dependency_needle.constants import ANNOTATIONS, RETURN
+from dependency_needle.constants import ANNOTATIONS
 from dependency_needle.lifetime_enums import LifeTimeEnums
 from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
@@ -14,6 +15,7 @@ from dependency_needle.dependency_strategy import (
     TransientDependencyStrategy,
     SingeltonDependencyStrategy
 )
+from dependency_needle.identifier_facade import IdentifierFacade
 
 
 class Container:
@@ -127,8 +129,10 @@ class Container:
         interface_to_build: IDependencyStrategyInterface = (
             self.__interface_registery_lookup[interface]
         )
-        return interface_to_build.build(self.__interface_registery_lookup,
-                                        key_lookup)
+        return interface_to_build.build(
+            self.__interface_registery_lookup,
+            key_lookup
+        )
 
     def clear(self, key_lookup):
         """Clear created dependencies for specific key
@@ -139,78 +143,118 @@ class Container:
         if key_lookup in self.__transient_lookup:
             del self.__transient_lookup[key_lookup]
 
-    def build_dependencies_decorator(self, fn):
-        """Wrap a given function to build its dependencies\
-        if they are registered.
+    def __get_kwargs_dependencies(self, fn, identifier, *args,
+                                  **kwargs) -> Dict[str, Any]:
+        """Build and return kwargs dependencies and return it to complete
+        dependency injection logic for the decorated method.
 
-        :param fn: function with request/identifier as its\
-        first parameter or an annotated parameter of type "Request".
-        :return: wrapped function.
+        :param fn: Function decorated.
+        :param identifier: Identifier used as lifetime lookup.
+        :return: kwargs dictionary.
         """
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
+        kwargs = kwargs.copy()
 
-            if hasattr(fn, ANNOTATIONS):
-                dependencies: dict = getattr(
-                    fn,
-                    ANNOTATIONS
-                )
+        if hasattr(fn, ANNOTATIONS):
+            dependencies: dict = getattr(
+                fn,
+                ANNOTATIONS
+            )
 
-                # Get request from annotations if it exists.
-                request_kwarg_key = ''
-
-                for key, class_type in dependencies.items():
-                    if any([
-                        issubclass(class_type, request_type)
-                        for request_type in Container.request_class_types
-                        if key != RETURN
-                    ]):
-                        request_kwarg_key = key
-
-                built_dependencies = {}
-
-                if request_kwarg_key:
-                    request_or_identifier = kwargs.pop(request_kwarg_key)
-                    # Assign request to kwargs as it'll be passed as a kwarg
-                    # if its annotated.
-                    built_dependencies[request_kwarg_key] = (
-                        request_or_identifier
+            for key, interface in dependencies.items():
+                if interface in self.__interface_registery_lookup:
+                    kwargs[key] = self.build(
+                        interface, identifier
                     )
-                else:
-                    try:
-                        request_or_identifier = args[0]
-                    except IndexError:
-                        raise IndexError(
-                            "Request parameter doesn't exist as an annotated"
-                            " parameter or first parameter."
-                        )
 
-                for key, interface in dependencies.items():
-                    try:
-                        if key != RETURN:
-                            built_dependencies[key] = self.build(
-                                interface, request_or_identifier
-                            )
-                    except (KeyError, TypeError):
-                        continue
+            return kwargs
 
-                kwargs.update(built_dependencies)
+    def __gaurd_invalid_identifier(self, id_arg: Optional[int] = None,
+                                   id_kwarg: Optional[str] = None) -> None:
+        if id_arg and not isinstance(id_arg, int):
+            raise TypeError(f"Id: {id_arg} is not an integer.")
 
-            result = fn(*args, **kwargs)
-            self.clear(request_or_identifier)
+        if id_kwarg and not isinstance(id_kwarg, str):
+            raise TypeError(f"Id: {id_arg} is not a string.")
 
-            return result
+        if id_arg and id_kwarg:
+            raise ValueError("Cant use both id_arg:"
+                             f" {id_arg} and id_kwarg: {id_kwarg}")
 
-        func_signature = signature(wrapper)
+    def __get_identifier(self,
+                         id_arg: Optional[int] = None,
+                         id_kwarg: Optional[str] = None,
+                         *args, **kwargs) -> Any:
+        """Get identifier for dependency building
 
-        wrapper_signature = func_signature.replace(
-            parameters=[
-                parameter for parameter in func_signature.parameters.values()
-                if parameter.annotation
-                not in self.__interface_registery_lookup
-            ]
-        )
+        :return: Any
+        """
+        self.__gaurd_invalid_identifier(id_arg, id_kwarg)
 
-        wrapper.__signature__ = wrapper_signature
+        if id_kwarg:
+            return IdentifierFacade.get_identifier_within_kwarg(id_arg, kwargs)
+        if id_arg:
+            return IdentifierFacade.get_identifier_within_args(id_arg, args)
+        return IdentifierFacade.get_identifier_within_args(1, args)
 
-        return wrapper
+    def build_dependencies_decorator(self,
+                                     id_arg: Optional[int] = None,
+                                     id_kwarg: Optional[str] = None,
+                                     ) -> Callable[[Callable[[Any], Any]],
+                                                   Callable[[Any], Any]]:
+        """Dependency decorator factory
+
+        identifier used is defaulted to id_arg of position 0
+
+        :param id_arg: Position of the identifier in the args passed.
+        :param id_kwarg: Name of the identifier in the kwargs passed.
+
+        :return: dependency building decorator.
+        """
+        def __build_dependencies_decorator(fn):
+            """Wrap a given function to build its dependencies\
+            if they are registered.
+
+            :param fn: function with request/identifier as its\
+            first parameter or an annotated parameter of type "Request".
+            :return: wrapped function.
+            """
+
+            if iscoroutinefunction(fn):
+                @wraps(fn)
+                async def wrapper(*args, **kwargs):
+                    identifier = self.__get_identifier(
+                        id_arg, id_kwarg, *args, **kwargs)
+                    built_kwargs = self.__get_kwargs_dependencies(
+                        fn, identifier, *args, **kwargs
+                    )
+                    result = await fn(*args, **built_kwargs)
+                    self.clear(identifier)
+
+                    return result
+            else:
+                @wraps(fn)
+                def wrapper(*args, **kwargs):
+                    identifier = self.__get_identifier(
+                        id_arg, id_kwarg, *args, **kwargs)
+                    built_kwargs = self.__get_kwargs_dependencies(
+                        fn, identifier, *args, **kwargs
+                    )
+                    result = fn(*args, **built_kwargs)
+                    self.clear(identifier)
+
+                    return result
+
+            func_signature = signature(wrapper)
+            wrapper_signature = func_signature.replace(
+                parameters=[
+                    parameter for parameter
+                    in func_signature.parameters.values()
+                    if parameter.annotation
+                    not in self.__interface_registery_lookup
+                ]
+            )
+            wrapper.__signature__ = wrapper_signature
+
+            return wrapper
+
+        return __build_dependencies_decorator

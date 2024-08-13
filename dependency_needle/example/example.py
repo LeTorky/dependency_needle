@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-
+from asyncio import run
 from requests import Request
 
 from dependency_needle.container import Container
 from dependency_needle.lifetime_enums import LifeTimeEnums
 
 
-def main():
+async def main():
     class MockInterfaceOne(ABC):
         """Mock interface class."""
         @abstractmethod
@@ -58,23 +58,23 @@ def main():
     container.register_interface(
         MockInterfaceThree, ConcreteThree, LifeTimeEnums.TRANSIENT)
 
-    @container.build_dependencies_decorator
+    @container.build_dependencies_decorator()
     def method_with_dependencies_kwarg(request: Request,
                                        dependency: MockInterfaceThree):
         return dependency
 
-    @container.build_dependencies_decorator
-    def method_with_dependencies_arg(request,
-                                     dependency: MockInterfaceThree):
+    @container.build_dependencies_decorator()
+    async def method_with_dependencies_arg(request,
+                                           dependency: MockInterfaceThree):
         return dependency
 
     dependency_array = [
         method_with_dependencies_kwarg(request=Request()),
-        method_with_dependencies_arg(Request()),
+        await method_with_dependencies_arg(Request()),
     ]
 
     return dependency_array
 
 
 if __name__ == "__main__":
-    main()
+    print(run(main()))
