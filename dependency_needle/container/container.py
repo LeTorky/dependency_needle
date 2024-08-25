@@ -3,7 +3,7 @@ from functools import wraps
 from inspect import signature, iscoroutinefunction
 
 from http.client import HTTPConnection as ClientHTTPConnection
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, get_origin
 from requests import Request
 from starlette.requests import HTTPConnection as StarlletteHTTPConnection
 
@@ -106,8 +106,14 @@ class Container:
         :param life_time: life time enum specifying the lifetime of the class.
         :return: None
         """
-        self.__assert_abstract_class(interface)
-        self.__assert_implementation(interface, concrete_class)
+        interface_to_assert = (get_origin(interface)
+                               if get_origin(interface)
+                               else interface)
+        concrete_to_assert = (get_origin(concrete_class)
+                              if get_origin(concrete_class)
+                              else concrete_class)
+        self.__assert_abstract_class(interface_to_assert)
+        self.__assert_implementation(interface_to_assert, concrete_to_assert)
         self.__assert_proper_enum_used(life_time)
         strategy: IDependencyStrategyInterface = (
             self.__lifetime_strategy_lookup[life_time]
