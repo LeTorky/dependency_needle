@@ -13,7 +13,7 @@ class IdentifierFacade:
         if position < 1:
             raise KeyError(f"Position: {position} cant be smaller than 1.")
 
-        return args[0]
+        return args[position-1]
 
     @classmethod
     def get_identifier_within_kwarg(cls, key_word: str, **kwargs) -> Any:
