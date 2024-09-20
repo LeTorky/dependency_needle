@@ -36,8 +36,8 @@ class IDependencyStrategyInterface(ABC):
         """Method to override in order to customize post creation behavior."""
         pass
 
-    def __build(self, interface: ABC, interface_registery: dict,
-                key_lookup: object) -> object:
+    def _build(self, interface: ABC, interface_registery: dict,
+               key_lookup: object) -> object:
         """Actual building method, used recursively.
 
         :param interface: interface required to be built.
@@ -87,4 +87,4 @@ class IDependencyStrategyInterface(ABC):
         :param key_lookup: key_lookup that\
             might be used to store in the lookup.
         """
-        return self.__build(self.__interface, interface_registery, key_lookup)
+        return self._build(self.__interface, interface_registery, key_lookup)
