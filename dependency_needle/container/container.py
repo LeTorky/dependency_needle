@@ -58,7 +58,7 @@ class Container:
         :param concrete_class: concrete class implementing the interface.
         :return: None
         """
-        if interface not in concrete_class.__bases__:
+        if not issubclass(concrete_class, interface):
             raise TypeError(f"Concrete class: {concrete_class}"
                             f" has to implement interface: {interface}.")
 
