@@ -6,7 +6,8 @@ from dependency_needle.dependency_strategy.\
     dependency_strategy_interface import IDependencyStrategyInterface
 
 
-singleton_build_lock = Lock()
+singleton_build_lock_lookup = {}
+lookup_lock = Lock()
 
 
 class SingeltonDependencyStrategy(IDependencyStrategyInterface):
@@ -31,6 +32,16 @@ class SingeltonDependencyStrategy(IDependencyStrategyInterface):
             return self._interface_lifetime_registery_lookup[interface]
         return None
 
-    def _build(self, interface: ABC, interface_registery: dict, key_lookup: object) -> object:
-        with singleton_build_lock:
-            return super()._build(interface, interface_registery, key_lookup)
+    def _build(self, interface: ABC,
+               interface_registery: dict,
+               key_lookup: object) -> object:
+        with lookup_lock:
+            if interface not in singleton_build_lock_lookup:
+                singleton_build_lock_lookup[interface] = Lock()
+        with singleton_build_lock_lookup[interface]:
+            built_interface = super()._build(interface,
+                                             interface_registery,
+                                             key_lookup)
+        with lookup_lock:
+            singleton_build_lock_lookup.pop(interface)
+        return built_interface
