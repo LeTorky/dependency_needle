@@ -2,12 +2,19 @@ from abc import ABC
 from functools import wraps
 from inspect import signature, iscoroutinefunction
 
-from http.client import HTTPConnection as ClientHTTPConnection
-from typing import Any, Callable, Dict, Optional, get_origin
-from requests import Request
-from starlette.requests import HTTPConnection as StarlletteHTTPConnection
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Optional,
+    Type,
+    Union,
+    get_origin,
+    Hashable
+)
 
 from dependency_needle.constants import ANNOTATIONS, RETURN
+from dependency_needle.constants.constants import InterfaceType
 from dependency_needle.lifetime_enums import LifeTimeEnums
 from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
@@ -22,35 +29,54 @@ class Container:
     """Container used to build a class by automating the dependancy injection
     to obtain inversion of control"""
 
-    request_class_types = [
-        Request,
-        StarlletteHTTPConnection,
-        ClientHTTPConnection
-    ]
-
     def __init__(self):
-        self.__interface_registery_lookup = {}
-        self.__singleton_lookup = {}
-        self.__transient_lookup = {}
-        self.__lifetime_meta_lookup = {
+        self.__interface_registery_lookup: Dict[
+            type,
+            IDependencyStrategyInterface
+        ] = {}
+        self.__singleton_lookup: Dict[
+            Type[InterfaceType], InterfaceType  # type: ignore
+        ] = {}
+        self.__transient_lookup: Dict[
+            Type[InterfaceType], InterfaceType  # type: ignore
+        ] = {}
+        self.__scoped_lookup: Dict[
+            Hashable,
+            Dict[Type[InterfaceType], InterfaceType]  # type: ignore
+        ] = {}
+        self.__lifetime_meta_lookup: Union[
+            Dict[Type[InterfaceType], InterfaceType],  # type: ignore
+            Dict[
+                Hashable, Dict[
+                    Type[InterfaceType], InterfaceType  # type: ignore
+                ]
+            ]
+        ] = {
             LifeTimeEnums.SINGLETON: self.__singleton_lookup,
+            LifeTimeEnums.SCOPED: self.__scoped_lookup,
+            # Unused dictionary
             LifeTimeEnums.TRANSIENT: self.__transient_lookup,
-            # Un-Used dictionary
-            LifeTimeEnums.SCOPED: {}
         }
-        self.__lifetime_strategy_lookup = {
+        self.__lifetime_strategy_lookup: Dict[
+            LifeTimeEnums,
+            Type[IDependencyStrategyInterface]
+        ] = {
             LifeTimeEnums.SINGLETON: SingeltonDependencyStrategy,
             LifeTimeEnums.TRANSIENT: TransientDependencyStrategy,
             # Un-Used dictionary
             LifeTimeEnums.SCOPED: ScopedDependencyStrategy
         }
 
-    def __gaurd_build_unregistered_interface(self, interface: ABC):
+    def __gaurd_build_unregistered_interface(self, interface: type):
         """Throw 'KeyError' exception if interface is not registered."""
         if interface not in self.__interface_registery_lookup:
             raise KeyError(f"Interface: {interface} is not registered.")
 
-    def __assert_implementation(self, interface: ABC, concrete_class) -> None:
+    def __assert_implementation(
+            self,
+            interface: type,
+            concrete_class: type
+    ) -> None:
         """Assert that the concrete class implements the interface
         being registered.
 
@@ -62,7 +88,7 @@ class Container:
             raise TypeError(f"Concrete class: {concrete_class}"
                             f" has to implement interface: {interface}.")
 
-    def __is_abstract_class(self, interface: ABC) -> bool:
+    def __is_abstract_class(self, interface: type) -> bool:
         """Check if interface sent is an abstract class.
 
         :param interface: interface needed to be checked.
@@ -76,7 +102,7 @@ class Container:
             for base in bases
         ])
 
-    def __assert_abstract_class(self, interface: ABC) -> None:
+    def __assert_abstract_class(self, interface: type) -> None:
         """Assert that the interface being registered is an abstract class.
 
         :param interface: interface needed to be registered.
@@ -96,7 +122,7 @@ class Container:
         if enum not in LifeTimeEnums.__members__.values():
             raise KeyError(f"Enum: {enum} does not exist in 'LifeTimeEnums'.")
 
-    def register_interface(self, interface: ABC,
+    def register_interface(self, interface: type,
                            concrete_class,
                            life_time: LifeTimeEnums) -> None:
         """Register interface with a corresponding concrete class to use.
@@ -106,24 +132,39 @@ class Container:
         :param life_time: life time enum specifying the lifetime of the class.
         :return: None
         """
-        interface_to_assert = (get_origin(interface)
-                               if get_origin(interface)
-                               else interface)
-        concrete_to_assert = (get_origin(concrete_class)
-                              if get_origin(concrete_class)
-                              else concrete_class)
+        interface_to_assert_origin = get_origin(interface)
+        concrete_to_assert_origin = get_origin(concrete_class)
+
+        interface_to_assert = (
+            interface_to_assert_origin
+            if interface_to_assert_origin
+            else interface
+        )
+        concrete_to_assert = (
+            concrete_to_assert_origin
+            if concrete_to_assert_origin
+            else concrete_class
+        )
+
         self.__assert_abstract_class(interface_to_assert)
         self.__assert_implementation(interface_to_assert, concrete_to_assert)
         self.__assert_proper_enum_used(life_time)
-        strategy: IDependencyStrategyInterface = (
+        strategy = (
             self.__lifetime_strategy_lookup[life_time]
         )
 
         lookup = self.__lifetime_meta_lookup[life_time]
         self.__interface_registery_lookup[interface] = strategy(
-            lookup, interface, concrete_class)
+            lookup,  # type: ignore
+            interface,
+            concrete_class
+        )
 
-    def build(self, interface: ABC, key_lookup) -> object:
+    def build(
+        self,
+        interface: Type[InterfaceType],
+        key_lookup: Hashable
+    ) -> InterfaceType:
         """Build an interface by utilizing the registery lookup.
 
         :param interface: interface needed to be built
@@ -132,10 +173,11 @@ class Container:
         :return object: concrete class that implemenets that interface
         """
         self.__gaurd_build_unregistered_interface(interface)
-        interface_to_build: IDependencyStrategyInterface = (
+        interface_strategy_builder = (
             self.__interface_registery_lookup[interface]
         )
-        return interface_to_build.build(
+        return interface_strategy_builder.build(
+            interface,
             self.__interface_registery_lookup,
             key_lookup
         )
@@ -149,8 +191,13 @@ class Container:
         if key_lookup in self.__transient_lookup:
             del self.__transient_lookup[key_lookup]
 
-    def __get_kwargs_dependencies(self, fn, identifier, *args,
-                                  **kwargs) -> Dict[str, Any]:
+    def __get_kwargs_dependencies(
+        self,
+        fn: Callable,
+        identifier: Hashable,
+        *args,
+        **kwargs
+    ) -> Dict[str, Any]:
         """Build and return kwargs dependencies and return it to complete
         dependency injection logic for the decorated method.
 
@@ -161,7 +208,7 @@ class Container:
         kwargs = kwargs.copy()
 
         if hasattr(fn, ANNOTATIONS):
-            dependencies: dict = getattr(
+            dependencies: Dict[str, type] = getattr(
                 fn,
                 ANNOTATIONS
             )
@@ -173,7 +220,7 @@ class Container:
                         interface, identifier
                     )
 
-            return kwargs
+        return kwargs
 
     def __gaurd_invalid_identifier(self, id_arg: Optional[int] = None,
                                    id_kwarg: Optional[str] = None) -> None:
@@ -181,7 +228,7 @@ class Container:
             raise TypeError(f"Id: {id_arg} is not an integer.")
 
         if id_kwarg and not isinstance(id_kwarg, str):
-            raise TypeError(f"Id: {id_arg} is not a string.")
+            raise TypeError(f"Id: {id_kwarg} is not a string.")
 
         if id_arg and id_kwarg:
             raise ValueError("Cant use both id_arg:"
@@ -190,7 +237,7 @@ class Container:
     def __get_identifier(self,
                          id_arg: Optional[int] = None,
                          id_kwarg: Optional[str] = None,
-                         *args, **kwargs) -> Any:
+                         *args, **kwargs) -> Hashable:
         """Get identifier for dependency building
 
         :return: Any
@@ -204,11 +251,12 @@ class Container:
             return IdentifierFacade.get_identifier_within_args(id_arg, *args)
         return IdentifierFacade.get_identifier_within_args(1, args)
 
-    def build_dependencies_decorator(self,
-                                     id_arg: Optional[int] = None,
-                                     id_kwarg: Optional[str] = None,
-                                     ) -> Callable[[Callable[[Any], Any]],
-                                                   Callable[[Any], Any]]:
+    def build_dependencies_decorator(
+            self,
+            id_arg: Optional[int] = None,
+            id_kwarg: Optional[str] = None,
+        ) -> Callable[[Callable],
+                      Callable]:
         """Dependency decorator factory
 
         identifier used is defaulted to id_arg of position 0
@@ -229,7 +277,7 @@ class Container:
 
             if iscoroutinefunction(fn):
                 @wraps(fn)
-                async def wrapper(*args, **kwargs):
+                async def wrapper(*args, **kwargs):  # type: ignore
                     identifier = self.__get_identifier(
                         id_arg, id_kwarg, *args, **kwargs)
                     built_kwargs = self.__get_kwargs_dependencies(
@@ -261,7 +309,7 @@ class Container:
                     not in self.__interface_registery_lookup
                 ]
             )
-            wrapper.__signature__ = wrapper_signature
+            wrapper.__signature__ = wrapper_signature  # type: ignore
 
             return wrapper
 

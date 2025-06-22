@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from asyncio import run
-from requests import Request
+from typing import Hashable
 
 from dependency_needle.container import Container
 from dependency_needle.lifetime_enums import LifeTimeEnums
@@ -54,29 +54,30 @@ async def main():
     container.register_interface(
         MockInterfaceOne, ConcreteOne, LifeTimeEnums.SINGLETON)
     container.register_interface(
-        MockInterfaceTwo, ConcreteTwo, LifeTimeEnums.SINGLETON)
+        MockInterfaceTwo, ConcreteTwo, LifeTimeEnums.SCOPED)
     container.register_interface(
         MockInterfaceThree, ConcreteThree, LifeTimeEnums.TRANSIENT)
 
     @container.build_dependencies_decorator(id_kwarg='request')
     def method_with_dependencies_kwarg(
-            request: Request,
+            request: Hashable,
             dependency: MockInterfaceThree) -> MockInterfaceThree:
         return dependency
 
     @container.build_dependencies_decorator(id_arg=1)
     async def method_with_dependencies_arg(
-            request,
+            request: Hashable,
             dependency: MockInterfaceThree) -> MockInterfaceThree:
         return dependency
 
     dependency_array = [
-        method_with_dependencies_kwarg(request=Request()),
-        await method_with_dependencies_arg(Request()),
+        method_with_dependencies_kwarg(request='asd'),
+        await method_with_dependencies_arg('asd'),
     ]
 
     return dependency_array
 
 
 if __name__ == "__main__":
+    # Prints out an array of built classes.
     print(run(main()))
