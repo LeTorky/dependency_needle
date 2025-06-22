@@ -70,13 +70,18 @@ async def main():
             dependency: MockInterfaceThree) -> MockInterfaceThree:
         return dependency
 
+    HASHABLE_LOOKUP = 'MockLookUp'
+
     dependency_array = [
-        method_with_dependencies_kwarg(request='asd'),
-        await method_with_dependencies_arg('asd'),
+        # Mocking an invocation of a decorated method.
+        method_with_dependencies_kwarg(request=HASHABLE_LOOKUP),
+        # Mocking an invocation of a decorated async method.
+        await method_with_dependencies_arg(HASHABLE_LOOKUP),
+        # Manual build of dependency.
+        container.build(MockInterfaceOne, HASHABLE_LOOKUP)
     ]
 
     return dependency_array
-
 
 if __name__ == "__main__":
     # Prints out an array of built classes.
