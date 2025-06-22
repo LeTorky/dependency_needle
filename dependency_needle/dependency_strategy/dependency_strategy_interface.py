@@ -68,7 +68,7 @@ class IDependencyStrategyInterface(ABC):
             might be used to store in the lookup.
         """
         self.__gaurd_build_unregistered_interface(
-            self.__interface, interface_registery)  # type: ignore
+            interface, interface_registery)  # type: ignore
 
         concrete_class = self._custom_pre_build_strategy(
             interface, key_lookup)
