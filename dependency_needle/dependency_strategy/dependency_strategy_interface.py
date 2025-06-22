@@ -21,7 +21,7 @@ class IDependencyStrategyInterface(ABC):
         self._interface_lifetime_registery_lookup\
             = interface_lifetime_registery_lookup
         self.__interface = interface
-        self.__concrete_class = concrete_class
+        self._concrete_class = concrete_class
 
     def __gaurd_build_unregistered_interface(
         self,
@@ -78,7 +78,7 @@ class IDependencyStrategyInterface(ABC):
             class_registered: IDependencyStrategyInterface = (
                 interface_registery[interface]
             )
-            class_to_build = class_registered.__concrete_class
+            class_to_build = class_registered._concrete_class
 
             if hasattr(getattr(class_to_build, INIT), ANNOTATIONS):
                 dependencies: Dict[type, type] = getattr(
