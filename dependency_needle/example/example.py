@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from asyncio import run
 from typing import Hashable
 
-from dependency_needle.container import Container
+from dependency_needle.container import Container, IContainer
 from dependency_needle.lifetime_enums import LifeTimeEnums
 
 
@@ -67,8 +67,9 @@ async def main():
     @container.build_dependencies_decorator(id_arg=1)
     async def method_with_dependencies_arg(
             request: Hashable,
-            dependency: MockInterfaceThree) -> MockInterfaceThree:
-        return dependency
+            dependency: IContainer) -> MockInterfaceThree:
+        lazy_built_dep = dependency.build(MockInterfaceThree, request)
+        return lazy_built_dep
 
     HASHABLE_LOOKUP = 'MockLookUp'
 
@@ -78,11 +79,12 @@ async def main():
         # Mocking an invocation of a decorated async method.
         await method_with_dependencies_arg(HASHABLE_LOOKUP),
         # Manual build of dependency.
-        container.build(MockInterfaceOne, HASHABLE_LOOKUP)
+        container.build(MockInterfaceThree, HASHABLE_LOOKUP)
     ]
 
     return dependency_array
 
-if __name__ == "__main__":
+if True:
     # Prints out an array of built classes.
-    print(run(main()))
+    output = run(main())
+    print(output)

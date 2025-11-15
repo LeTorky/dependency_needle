@@ -13,8 +13,8 @@ from typing import (
     Hashable
 )
 
-from dependency_needle.constants import ANNOTATIONS, RETURN
-from dependency_needle.constants.constants import InterfaceType
+from dependency_needle.constants import ANNOTATIONS, RETURN, InterfaceType
+from dependency_needle.container.interface_container import IContainer
 from dependency_needle.lifetime_enums import LifeTimeEnums
 from dependency_needle.dependency_strategy import (
     IDependencyStrategyInterface,
@@ -25,7 +25,7 @@ from dependency_needle.dependency_strategy import (
 from dependency_needle.identifier_facade import IdentifierFacade
 
 
-class Container:
+class Container(IContainer):
     """Container used to build a class by automating the dependancy injection
     to obtain inversion of control"""
 
@@ -66,6 +66,23 @@ class Container:
             # Un-Used dictionary
             LifeTimeEnums.SCOPED: ScopedDependencyStrategy
         }
+
+        self.__post__init__()
+
+    def __post__init__(self):
+        """Post __init__ operations."""
+        # Register IContainer interface with Container concrete class
+        # to align with gaurd rules.
+        self.register_interface(
+            IContainer,
+            Container,
+            LifeTimeEnums.SINGLETON
+        )
+
+        # Avail `self` as IContainer registery instance, for lazy / on-demand
+        # dependency resolution, to avoid infinite recursive loop when building
+        # an IContainer instance.
+        self.__singleton_lookup[IContainer] = self
 
     def __gaurd_build_unregistered_interface(self, interface: type):
         """Throw 'KeyError' exception if interface is not registered."""
